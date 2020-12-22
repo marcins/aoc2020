@@ -41,25 +41,3 @@ pub fn solve_part2(input: &Vec<Policy>) -> usize {
         (low == v.letter && high != v.letter) || (low != v.letter && high == v.letter)
     }).count()
 }
-
-
-// #[aoc(day1, part2)]
-// pub fn solve_part2(input: &Vec<i32>) -> i32 {
-//     let mut i = 0;
-//     while i < input.len() - 1 {
-//         let mut j = i + 1;
-//         while j < input.len() {
-//             let mut k = j + 1;
-//             while k < input.len() {
-//                 if input[i] + input[j] + input[k] == 2020 {
-//                     println!("{} x {} x {}", input[i], input[j], input[k]);
-//                     return input[i] * input[j] * input[k];
-//                 }
-//                 k = k + 1;
-//             }
-//             j = j + 1;
-//         }
-//         i = i + 1;
-//     }
-//     panic!("Not found")
-// }
