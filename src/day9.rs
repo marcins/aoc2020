@@ -34,9 +34,9 @@ fn find_weakness(numbers: &[u64], target: u64) -> u64 {
 
     for i in 0..subset.len() {
         for j in i..subset.len() {
-            if subset[i..j].iter().map(|v| **v).sum::<u64>() == target {
-                return **(&subset[i..j].iter().max().unwrap())
-                    + **(&subset[i..j].iter().min().unwrap());
+            let set = &subset[i..j];
+            if set.iter().map(|v| **v).sum::<u64>() == target {
+                return **(set.iter().max().unwrap()) + **(set.iter().min().unwrap());
             }
         }
     }
