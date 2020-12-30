@@ -1,7 +1,4 @@
 use aoc_runner_derive::{aoc, aoc_generator};
-use petgraph::algo;
-use petgraph::graph::{DiGraph, NodeIndex};
-use std::collections::HashMap;
 
 #[aoc_generator(day10)]
 fn parse_input(input: &str) -> Vec<u64> {
@@ -24,67 +21,48 @@ fn solve_part1(joltages: &[u64]) -> u64 {
     ones * threes
 }
 
-struct Adapters {
-    graph: DiGraph<u64, ()>,
-    root_nx: NodeIndex,
-    device_nx: NodeIndex,
-}
-
-fn build_graph(joltages: &[u64]) -> Adapters {
-    let mut graph = DiGraph::<u64, ()>::new();
-    let mut node_map = HashMap::<u64, NodeIndex>::new();
-    let edges: Vec<(u64, u64)> = Vec::new();
-    // Nodes are the adapters
-    for joltage in joltages.iter() {
-        let nx = graph.add_node(*joltage);
-        node_map.insert(*joltage, nx);
-    }
-
-    let root_nx = node_map.get(&joltages[0]).unwrap();
-    let device_nx = node_map.get(&joltages[joltages.len() - 1]).unwrap();
-
-    // created directed edges from each node to each node with joltage within 3
-    for (v, nx) in node_map.iter() {
-        for v2 in joltages.iter() {
-            if *v2 <= *v {
-                continue;
-            }
-            if *v2 > *v + 3 {
-                continue;
-            }
-            graph.add_edge(*nx, *node_map.get(v2).unwrap(), ());
-        }
-    }
-    Adapters {
-        graph,
-        root_nx: *root_nx,
-        device_nx: *device_nx,
-    }
-}
-
 #[aoc(day10, part2)]
-fn solve_part2(joltages: &[u64]) -> usize {
-    let adapters = build_graph(joltages);
-    // This works for the examples but is impractical for the real thing, need a
-    // better solution..
-    //
-    // The thing to consider is that adapters have to be within 3 - eg. 1 can connect to 2, 3, or 4
-    // This means if we're at a 1, and have a 2, 3 and 4 then have:
-    //  1-4, 1-2-4, 1-2-3-4, 1-3-4 - 4 combos
-    //
-    algo::all_simple_paths::<Vec<NodeIndex>, &DiGraph<u64, ()>>(
-        &adapters.graph,
-        adapters.root_nx,
-        adapters.device_nx,
-        1,
-        None,
-    )
-    // .map(|p| {
-    //     dbg!(&p);
-    //     p
-    // })
-    .count()
+fn solve_part2(joltages: &[u64]) -> u64 {
+    // I needed some hints for this part - I originally had a graph based solution
+    // that worked for small samples but was too computationally expensive for
+    // the full problem.
+    #[derive(Debug)]
+    struct Result {
+        run_count: usize,
+        result: u64,
+    };
+
+    // Find gaps of > 1, keeping track of how many were in a run of 1s - these
+    // runs cause a combo, we multiply all the combos together to get the answer
+    let result = joltages.windows(2).fold(
+        Result {
+            run_count: 0,
+            result: 1,
+        },
+        |mut acc, v| {
+            acc.run_count += 1;
+            if v[1] - v[0] > 1 {
+                // if there's a run on joltages then these correspond to a particular
+                // number of combos.
+                let size = match acc.run_count {
+                    0 => 1,
+                    1 => 1,
+                    2 => 1,
+                    3 => 2,
+                    4 => 4,
+                    5 => 7,
+                    _ => panic!("Unexpected run"),
+                };
+                acc.result *= size;
+                acc.run_count = 0;
+                return acc;
+            }
+            acc
+        },
+    );
+    result.result
 }
+
 #[cfg(test)]
 mod test {
     use super::*;
