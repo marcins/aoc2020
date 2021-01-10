@@ -1,5 +1,4 @@
 use aoc_runner_derive::aoc;
-use rayon::prelude::*;
 use std::fmt;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -112,7 +111,7 @@ impl SeatMap {
     fn advance(&mut self) -> bool {
         let new_grid: Vec<GridValue> = self
             .coords
-            .par_iter()
+            .iter()
             .map(|(x, y)| {
                 let current = self.get(*x, *y);
                 if current == GridValue::Floor {
