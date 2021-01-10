@@ -17,7 +17,7 @@ struct SeatMap {
     grid: Grid,
     width: usize,
     height: usize,
-    _seating_algo: SeatingAlgo,
+    seating_algo: SeatingAlgo,
 }
 
 impl SeatMap {
@@ -42,51 +42,95 @@ impl SeatMap {
             grid,
             width,
             height,
-            _seating_algo: seating_algo,
+            seating_algo: seating_algo,
         }
     }
     fn get(&self, x: usize, y: usize) -> GridValue {
         self.grid[y][x]
     }
 
+    fn find_occupied_seat(
+        &self,
+        x: usize,
+        y: usize,
+        x_step: isize,
+        y_step: isize,
+        range: usize,
+    ) -> bool {
+        let mut xx = x as isize;
+        let mut yy = y as isize;
+        let mut c = 0;
+        while c < range {
+            xx += x_step;
+            yy += y_step;
+
+            if xx < 0 || xx as usize >= self.width || yy < 0 || yy as usize >= self.height {
+                return false;
+            }
+
+            match self.get(xx as usize, yy as usize) {
+                GridValue::Occupied => return true,
+                GridValue::Empty => return false,
+                _ => (),
+            };
+            c += 1;
+        }
+        return false;
+    }
+
+    fn adjacent_occupied(&self, x: usize, y: usize, range: usize) -> usize {
+        let steps = vec![
+            (-1, -1),
+            (0, -1),
+            (1, -1),
+            (-1, 0),
+            (1, 0),
+            (-1, 1),
+            (0, 1),
+            (1, 1),
+        ];
+        steps
+            .iter()
+            .filter(|(x_step, y_step)| {
+                self.find_occupied_seat(x, y, *x_step as isize, *y_step as isize, range)
+            })
+            .count()
+    }
+
     fn advance(&mut self) -> bool {
-        let old_grid = self.grid.clone();
+        let mut new_grid = self.grid.clone();
         for y in 0..self.height {
             for x in 0..self.width {
-                let current = old_grid[y][x];
+                let current = self.grid[y][x];
                 if current == GridValue::Floor {
                     continue;
                 }
-                // check adjacent squares
-                let mut adjacent_occupied = 0;
-                for xx in x as isize - 1..=x as isize + 1 {
-                    for yy in y as isize - 1..=y as isize + 1 {
-                        if (xx == x as isize && yy == y as isize)
-                            || xx < 0
-                            || xx as usize >= self.width
-                            || yy < 0
-                            || yy as usize >= self.height
-                        {
-                            //
-                        } else if old_grid[yy as usize][xx as usize] == GridValue::Occupied {
-                            adjacent_occupied += 1;
-                        }
-                    }
-                }
-                if current == GridValue::Occupied && adjacent_occupied >= 4 {
+
+                let (range, occupancy_threshold) = match self.seating_algo {
+                    SeatingAlgo::Near => (1, 4),
+                    SeatingAlgo::Far => (usize::MAX, 5),
+                };
+
+                let adjacent_occupied = self.adjacent_occupied(x, y, range);
+
+                if current == GridValue::Occupied && adjacent_occupied >= occupancy_threshold {
                     // -> empty
-                    self.grid[y][x] = GridValue::Empty;
+                    new_grid[y][x] = GridValue::Empty;
                 } else if current == GridValue::Empty && adjacent_occupied == 0 {
                     // -> occupied
-                    self.grid[y][x] = GridValue::Occupied;
+                    new_grid[y][x] = GridValue::Occupied;
                 }
             }
         }
-        !old_grid
+        let changed = !new_grid
             .iter()
             .flat_map(|v| v)
             .zip(self.grid.iter().flat_map(|v| v))
-            .all(|(v1, v2)| v1 == v2)
+            .all(|(v1, v2)| v1 == v2);
+        if changed {
+            self.grid = new_grid;
+        }
+        changed
     }
 
     fn occupied_seats(&self) -> usize {
@@ -141,6 +185,7 @@ fn solve_part1(inp: &str) -> usize {
     map.occupied_seats()
 }
 
+#[aoc(day11, part2)]
 fn solve_part2(inp: &str) -> usize {
     let mut map = SeatMap::new(inp, SeatingAlgo::Far);
     loop {
