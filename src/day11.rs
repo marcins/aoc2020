@@ -1,4 +1,5 @@
 use aoc_runner_derive::aoc;
+use rayon::prelude::*;
 use std::fmt;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -13,11 +14,14 @@ enum SeatingAlgo {
     Far,
 }
 
+type Grid = Vec<GridValue>;
+
 struct SeatMap {
     grid: Grid,
     width: usize,
     height: usize,
     seating_algo: SeatingAlgo,
+    coords: Vec<(usize, usize)>,
 }
 
 impl SeatMap {
@@ -25,28 +29,36 @@ impl SeatMap {
         let grid: Grid = raw_map
             .lines()
             .map(|line| line.trim())
-            .map(|line| {
+            .flat_map(|line| {
                 line.chars()
                     .map(|c| match c {
                         'L' => GridValue::Empty,
                         '.' => GridValue::Floor,
                         _ => panic!("Unexpected: {}", c),
                     })
-                    .collect()
+                    .collect::<Vec<GridValue>>()
             })
             .collect();
 
-        let height = grid.len();
-        let width = grid[0].len();
+        let height = raw_map.lines().count();
+        let width = raw_map.lines().nth(0).unwrap().len();
+        let mut coords = Vec::new();
+        for y in 0..height {
+            for x in 0..width {
+                coords.push((x, y));
+            }
+        }
+
         Self {
             grid,
             width,
             height,
             seating_algo: seating_algo,
+            coords,
         }
     }
     fn get(&self, x: usize, y: usize) -> GridValue {
-        self.grid[y][x]
+        self.grid[(y * self.width) + x]
     }
 
     fn find_occupied_seat(
@@ -98,12 +110,13 @@ impl SeatMap {
     }
 
     fn advance(&mut self) -> bool {
-        let mut new_grid = self.grid.clone();
-        for y in 0..self.height {
-            for x in 0..self.width {
-                let current = self.grid[y][x];
+        let new_grid: Vec<GridValue> = self
+            .coords
+            .par_iter()
+            .map(|(x, y)| {
+                let current = self.get(*x, *y);
                 if current == GridValue::Floor {
-                    continue;
+                    return current;
                 }
 
                 let (range, occupancy_threshold) = match self.seating_algo {
@@ -111,22 +124,25 @@ impl SeatMap {
                     SeatingAlgo::Far => (usize::MAX, 5),
                 };
 
-                let adjacent_occupied = self.adjacent_occupied(x, y, range);
+                let adjacent_occupied = self.adjacent_occupied(*x, *y, range);
 
                 if current == GridValue::Occupied && adjacent_occupied >= occupancy_threshold {
                     // -> empty
-                    new_grid[y][x] = GridValue::Empty;
+                    GridValue::Empty
                 } else if current == GridValue::Empty && adjacent_occupied == 0 {
                     // -> occupied
-                    new_grid[y][x] = GridValue::Occupied;
+                    GridValue::Occupied
+                } else {
+                    current
                 }
-            }
-        }
+            })
+            .collect();
+
         let changed = !new_grid
             .iter()
-            .flat_map(|v| v)
-            .zip(self.grid.iter().flat_map(|v| v))
+            .zip(self.grid.iter())
             .all(|(v1, v2)| v1 == v2);
+
         if changed {
             self.grid = new_grid;
         }
@@ -136,25 +152,22 @@ impl SeatMap {
     fn occupied_seats(&self) -> usize {
         self.grid
             .iter()
-            .flat_map(|v| v)
             .filter(|v| **v == GridValue::Occupied)
             .count()
     }
 
     fn pretty(&self) -> String {
         let mut out = String::new();
-        for y in 0..self.height {
-            for x in 0..self.width {
-                if x == 0 && y > 0 {
-                    out.push('\n');
-                }
-                let c = match self.get(x, y) {
-                    GridValue::Floor => '.',
-                    GridValue::Empty => 'L',
-                    GridValue::Occupied => '#',
-                };
-                out.push(c);
+        for (x, y) in self.coords.iter() {
+            if *x == 0 && *y > 0 {
+                out.push('\n');
             }
+            let c = match self.get(*x, *y) {
+                GridValue::Floor => '.',
+                GridValue::Empty => 'L',
+                GridValue::Occupied => '#',
+            };
+            out.push(c);
         }
         out
     }
@@ -165,13 +178,6 @@ impl fmt::Debug for SeatMap {
         f.write_str(&self.pretty())
     }
 }
-
-type Grid = Vec<Vec<GridValue>>;
-
-// #[aoc_generator(day11)]
-// fn parse_input(inp: &str) -> SeatMap {
-//     SeatMap::new(inp)
-// }
 
 #[aoc(day11, part1)]
 fn solve_part1(inp: &str) -> usize {
@@ -209,8 +215,12 @@ mod test {
         assert_eq!(
             seat_map.grid,
             vec![
-                vec![GridValue::Empty, GridValue::Floor, GridValue::Empty],
-                vec![GridValue::Floor, GridValue::Empty, GridValue::Floor]
+                GridValue::Empty,
+                GridValue::Floor,
+                GridValue::Empty,
+                GridValue::Floor,
+                GridValue::Empty,
+                GridValue::Floor
             ]
         )
     }
