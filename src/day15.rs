@@ -32,7 +32,6 @@ fn play_game(starting_numbers: &[i32], turns: usize) -> i32 {
     let mut turn: usize = starting_numbers.len() + 1;
     let mut last_spoken_number = *starting_numbers.last().unwrap();
     while turn <= turns {
-        // dbg!(&last_spoken);
         match last_spoken.get(&last_spoken_number) {
             Some(last_turn_spoken) => {
                 last_spoken_number = match last_turn_spoken {
@@ -46,9 +45,6 @@ fn play_game(starting_numbers: &[i32], turns: usize) -> i32 {
         }
         update_entry_for_turn(&mut last_spoken, turn, last_spoken_number);
         turn += 1;
-        // if (turn % 1000 == 0) {
-        //     println!("{}", turn);
-        // }
     }
     last_spoken_number
 }
