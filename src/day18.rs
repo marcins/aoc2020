@@ -41,66 +41,104 @@ fn tokenize(expr: &str) -> Vec<Token> {
     tokens
 }
 
-fn get_paren_tokens(tokens: &[Token], start: usize) -> &[Token] {
-    let mut end = 0;
-    let mut paren_ptr = start;
-    let mut level = 1;
-    while paren_ptr < tokens.len() {
-        if tokens[paren_ptr] == Token::ParenOpen {
-            level += 1;
-        } else if tokens[paren_ptr] == Token::ParenClose {
-            level -= 1;
-            if level == 0 {
-                end = paren_ptr - 1;
-                break;
+fn execute(tokens: &[Token], add_precedence: bool) -> u64 {
+    let mut expanded_tokens: Vec<Token> = vec![];
+    let mut level = 0;
+    let mut start_paren = 0;
+
+    // eliminates parens by taking a paren'd expression and passing it back through
+    // execute to "reduce" it.
+    for (idx, token) in tokens.iter().enumerate() {
+        match token {
+            Token::ParenOpen => {
+                if level == 0 {
+                    start_paren = idx;
+                }
+                level += 1;
+            }
+            Token::ParenClose => {
+                level -= 1;
+                if level == 0 {
+                    let paren_value =
+                        Token::Number(execute(&tokens[start_paren + 1..idx], add_precedence));
+                    expanded_tokens.push(paren_value);
+                }
+            }
+            _ => {
+                if level == 0 {
+                    expanded_tokens.push(*token)
+                }
             }
         }
-        paren_ptr += 1;
     }
-    &tokens[start..=end]
-}
 
-fn execute(tokens: &[Token]) -> u64 {
-    let mut right;
-    let mut op;
-    let mut ptr = 0;
+    // At this point `updated_tokens` should be a simplified with parens evaluated
 
-    let mut left = tokens[0];
-    while ptr < tokens.len() - 1 {
-        if left == Token::ParenOpen {
-            let paren_tokens = get_paren_tokens(tokens, ptr + 1);
-            left = Token::Number(execute(paren_tokens));
-            ptr += paren_tokens.len() + 1;
-            if ptr >= tokens.len() - 1 {
-                break;
+    // if we're doing add precedence, run through the expression and replace all the a + b with a value
+    // then run through the expression again to do the muls, else just run through once and do whatever.
+    if expanded_tokens.len() == 1 {
+        return expanded_tokens[0].value();
+    }
+
+    let passes = if add_precedence { 2 } else { 1 };
+    let mut input = expanded_tokens;
+    let mut output = vec![];
+    let mut left = input[0];
+    for pass in 0..passes {
+        let mut ptr = 0;
+        left = input[0];
+        while ptr < input.len() - 1 {
+            let op = input[ptr + 1];
+            let right = input[ptr + 2];
+            if add_precedence && pass == 0 {
+                match op {
+                    Token::OpAdd => {
+                        left = Token::Number(left.value() + right.value());
+                        ptr += 2;
+                    }
+                    Token::OpMul => {
+                        output.push(left);
+                        output.push(op);
+                        left = right;
+                        ptr += 2;
+                    }
+                    _ => panic!("Unexpected op {:?}", op),
+                }
+            } else {
+                left = match op {
+                    Token::OpAdd => Token::Number(left.value() + right.value()),
+                    Token::OpMul => Token::Number(left.value() * right.value()),
+                    _ => panic!("Unexpected operator: {:?} at {}", op, ptr + 1),
+                };
+                ptr += 2;
             }
         }
-        op = tokens[ptr + 1];
-        right = tokens[ptr + 2];
-        if right == Token::ParenOpen {
-            let paren_tokens = get_paren_tokens(tokens, ptr + 3);
-            right = Token::Number(execute(paren_tokens));
-            ptr += paren_tokens.len() + 1;
+        if pass == 0 && add_precedence {
+            output.push(left);
         }
-        // dbg!(left, op, right);
-        left = match op {
-            Token::OpAdd => Token::Number(left.value() + right.value()),
-            Token::OpMul => Token::Number(left.value() * right.value()),
-            _ => panic!("Unexpected operator: {:?} at {}", op, ptr + 1),
-        };
-        ptr += 2;
+        input = output.to_owned()
     }
     left.value()
 }
 
 fn eval(expr: &str) -> u64 {
     let tokens = tokenize(expr);
-    // parse(&tokens);
-    execute(&tokens)
+    execute(&tokens, false)
 }
+
+fn eval_with_precendece(expr: &str) -> u64 {
+    let tokens = tokenize(expr);
+    execute(&tokens, true)
+}
+
 #[aoc(day18, part1)]
 fn solve_part1(inp: &str) -> u64 {
     inp.lines().map(|line| eval(line)).sum()
+}
+
+#[aoc(day18, part2)]
+fn solve_part2(inp: &str) -> u64 {
+    inp.lines().map(|line| eval_with_precendece(line)).sum()
 }
 
 #[cfg(test)]
@@ -124,6 +162,22 @@ mod test {
         assert_eq!(
             eval("((2 + 4 * 9) * (6 + 9 * 8 + 6) + 6) + 2 + 4 * 2"),
             13632
+        );
+    }
+
+    #[test]
+    fn test_examples_part2() {
+        assert_eq!(eval_with_precendece("1 + 2 * 3 + 4 * 5 + 6"), 231);
+        assert_eq!(eval_with_precendece("1 + (2 * 3) + (4 * (5 + 6))"), 51);
+        assert_eq!(eval_with_precendece("2 * 3 + (4 * 5)"), 46);
+        assert_eq!(eval_with_precendece("5 + (8 * 3 + 9 + 3 * 4 * 3)"), 1445);
+        assert_eq!(
+            eval_with_precendece("5 * 9 * (7 * 3 * 3 + 9 * 3 + (8 + 6 * 4))"),
+            669060
+        );
+        assert_eq!(
+            eval_with_precendece("((2 + 4 * 9) * (6 + 9 * 8 + 6) + 6) + 2 + 4 * 2"),
+            23340
         );
     }
 }
